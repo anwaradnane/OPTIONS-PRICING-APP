@@ -194,7 +194,7 @@ for i in range(len(selected_MODELE)):
         st.pyplot(fig)
 
     else:
-        print('PAS DU MODEL')
+        print('PAS DU MODEL ok')
 
 
 
