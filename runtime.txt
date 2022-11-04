@@ -1,2 +1,2 @@
 python-3.11.0
-pyproject-toml-0.0.10
+pyproject-toml-0.0.11
