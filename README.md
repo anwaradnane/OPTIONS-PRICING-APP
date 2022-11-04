@@ -1,6 +1,5 @@
-# OPTIONS-PRICING-APPLICATION
-La finance est un domaine qui n’a cesse gu ´ ere d’intriguer les chercheurs et les scientifiques depuis longtemps. `
-Et chacun aborde ce suj et a partir de son point de vue, et ne traite que les th ` emes reli ` es´ a son domaine d’ ` etude ´
+<h1 style="color:green">OPTIONS-PRICING-APPLICATION</h1>
+La finance est un domaine qui n’a cesse t de vue, et ne traite que les th ` emes reli ` es´ a son domaine d’ ` etude ´
 et d’expertise. Neanmoins, la finance demeure touj ours propice pour les chercheurs qui prennent des d ´ efis dans ´
 le but d ’expliquer les variations des differentes entit ´ es qui constituent ce champ d ’int ´ er´ et. De ce fait , plusieurs ˆ
 modeles ont ` et ´ e´ elabor ´ es et conc¸us afin d’expliquer des changements structurels comme l’augmentation du prix ´
