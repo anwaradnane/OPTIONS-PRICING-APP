@@ -11,6 +11,6 @@ produits echang ´ es sur ce march ´ e le rendent le plus important au monde. I
 financier se decide et la vision future de l’ ´ economie du monde entier se dessine chaque jour avec un impact dans ´
 bien des ramifications. Dans ce projet on aura comme but de mettre en lumiere le mod ` ele d’ ` evaluation des options ´
 binomiales est un modele tr ` es simple utilis ` e pour ´ evaluer les options. Compar ´ e au mod ´ ele trinominale et celui de `
-Black Scholes
+Black Scholes ainsi que monte carlo
 
 
