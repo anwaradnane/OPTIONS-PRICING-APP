@@ -1,4 +1,4 @@
-<h1 style="color:green">OPTIONS-PRICING-APPLICATION</h1> :lien: https://optionpricingapp.herokuapp.com/
+<h1 style="color:green">OPTIONS-PRICING-APPLICATION</h1> lien: https://optionpricingapp.herokuapp.com/
 
 La finance est un domaine qui n’a cesse t de vue, et ne traite que les th ` emes reli ` es´ a son domaine d’ ` etude ´
 et d’expertise. Neanmoins, la finance demeure touj ours propice pour les chercheurs qui prennent des d ´ efis dans ´
