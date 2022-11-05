@@ -5,6 +5,10 @@ import numpy as np
 from scipy.stats import norm
 import math
 import scipy
+from PIL import Image
+image = Image.open('image.png')
+
+st.image(image, width = 500)
 
 
 st.title('OPTIONS PRICING APPLICATION')
