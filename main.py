@@ -1,202 +1,232 @@
+import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-import pandas as pd
 import numpy as np
 from scipy.stats import norm
 import math
 import scipy
-from PIL import Image
-image = Image.open('imge.png')
+from scipy.optimize import minimize
+from nelson_siegel_svensson import NelsonSiegelSvenssonCurve, NelsonSiegelCurve
+from nelson_siegel_svensson.calibrate import calibrate_ns_ols, calibrate_nss_ols
 
-st.image(image, width = 500)
-
-
-st.title('OPTIONS PRICING APPLICATION')
-
-st.markdown("""
-l'application a comme objectif de faire le pricing des options en utilisant l'un des modeles suivants: 
-* **Binomial
-* **Trinomial
-* **Black Schools
-* **Monee Carlo
-""")
-
-st.sidebar.header('LA BARRE DES OPTIONS DES MODELES')
-# Sidebar - Sector selection
-df =['BINOMIAL','TRINOMIAL','BLACK SCHOOLES','MONTE CARLO']
-MODELE_PRICING =df
-selected_MODELE = st.sidebar.multiselect('MODELE MATHEMATIQUE CHOISI', MODELE_PRICING,MODELE_PRICING)
-S0= st.sidebar.slider("Cours initial de l'action",20,200,100)
-K = st.sidebar.slider("prix d'exercice",8,210,60)
-T= st.sidebar.slider('délai de maturité ',1,100,22)
-r = st.sidebar.slider('taux annuel sans risque',0,100,6)
-N = st.sidebar.slider('numero des itterations', 1,100, 44)
-sigma = st.sidebar.slider('sigma %',0,100,3)
-b=['Call','Put']
-opt=st.sidebar.selectbox('option type',b)
-
-sigma=sigma*10**-2
-r=r*10**-2
-
-
-def user_input_features():
-    data = {"Cours initial de l'action": S0,
-            "Prix d'exercice": K,
-            'Délai de maturité': T,
-            'Taux annuel sans risque': r,
-            'Numero des itterations':N,
-            'VOLATILITE':sigma }
-
-    features = pd.DataFrame(data, index=[0])
-    return features
-x= user_input_features()
-
-st.subheader('LES PARAMETRES DU MODELE SONT ')
-st.write(x)
-st.header('RESULTATS DES MODELES APRES LE CHOIX DES PARAMETRES')
-
-for i in range(len(selected_MODELE)):
-    if selected_MODELE[i] == 'BINOMIAL':
-        st.subheader('DANS LE CAS DU MODEL  BINOMIAL ')
-        def binomial_model(K, T, S0, r, N,sigma, opt):
-            m = 1
-            dt = T / N
-            # parametres
-            u = np.exp(sigma * np.sqrt(dt))
-            d = np.exp(-sigma * np.sqrt(dt))
-            p = (np.exp(r * dt) - d) / (u - d)
-
-            ######combinaison fct pour le model################
-            def combos(n, i):
-                return math.factorial(n) / (math.factorial(n - i) * math.factorial(i))
-
-            C = 0
-            P = 0
-            for k in reversed(range(N + 1)):
-                p_ = combos(N, k) * p ** k * (1 - p) ** (N - k)
-                ST = S0 * u ** k * d ** (N - k)
-                if opt == 'Call':
-                    C += max(ST - K, 0) * p_
-                else:
-                    P += max(0, K - ST) * p_
-
-            if opt == 'Call':
-                return np.exp(-r * T) * C
-            else:
-                return np.exp(-r * T) * P
-        st.write("AVEC LE MODEL BINOMIAL, LE PRIX DU CALL DEVRAIT ETRE ",binomial_model(K, T, S0, r, N,sigma, opt))
-        S = np.arange(0.1,1.5,0.01)
-        calls = [binomial_model(K, T, S0, r, N, s, 'Call') for s in S]
-        puts = [binomial_model(K, T, S0, r, N, s, 'Put') for s in S]
-        fig, ax = plt.subplots(1, 1)
-        ax.scatter(S, calls, label='Call')
-        ax.scatter(S, puts, label='Put')
-        ax.set_xlabel('volatilite')
-        ax.set_ylabel("la valeur de l'option")
-        st.pyplot(fig)
-    elif selected_MODELE[i] == 'TRINOMIAL':
-        st.subheader('DANS LE CAS DU MODEL  TRINOMIAL ')
-        def trinomial_Modele(K, T, S0, r, N,sigma, opt):
-            q = 0
-            m = 1
-            dt = T / N
-            u = np.exp(sigma * np.sqrt(2 * dt))
-            d = 1 / u
-            pu = ((math.exp((r - q) * dt / 2) - math.exp(-sigma * math.sqrt(dt / 2))) /
-                  (math.exp(sigma * math.sqrt(dt / 2)) - math.exp(-sigma * math.sqrt(dt / 2)))) ** 2
-            pd = ((math.exp(sigma * math.sqrt(dt / 2)) - math.exp((r - q) * dt / 2)) /
-                  (math.exp(sigma * math.sqrt(dt / 2)) - math.exp(-sigma * math.sqrt(dt / 2)))) ** 2
-            pm = 1 - pu - pd
-
-            def ss(N):
-                S = [np.array([S0])]
-                for i in range(N):
-                    prev_nodes = S[-1]  # At each loop, take the last element of the list
-                    ST = np.concatenate((prev_nodes * u, [prev_nodes[-1] * m, prev_nodes[-1] * d]))
-                    S.append(ST)
-                return S
-
-            call = [None] * N  # Empty list of size N
-            put = [None] * N  # Empty list of size N
-            for i in reversed(range(N)):
-                if (i == N - 1):
-                    payoffCall = np.maximum(0, max(ss(N)[i] - K))  # The payoff list is sorted, so take the first one
-                    payoffPut = np.maximum(0, max((K - ss(N)[i])))  # The payoff list is sorted, so take the first one
-                else:
-                    payoffCall = math.exp(-(r - q) * dt) * (pu * call[i + 1] + pd * call[i + 1] + pm * call[i + 1])
-                    payoffPut = math.exp(-(r - q) * dt) * (pu * put[i + 1] + pd * put[i + 1] + pm * put[i + 1])
-
-                call.insert(i, (payoffCall))
-                put.insert(i, (payoffPut))
-
-            if opt == 'Call':
-                return call[0]
-            else:
-                return put[0]
-        st.write("AVEC LE MODEL TRINOMIAL, LE PRIX DU CALL DEVRAIT ETRE ",trinomial_Modele(K, T, S0, r, N,sigma, opt))
-        S = np.arange(0.1, 1.5, 0.01)
-        calls = [trinomial_Modele(K, T, S0, r, N, s, 'Call') for s in S]
-        puts = [trinomial_Modele(K, T, S0, r, N, s, 'Put') for s in S]
-        fig, ax = plt.subplots(1, 1)
-        ax.scatter(S, calls, label='Call')
-        ax.scatter(S, puts, label='Put')
-        ax.set_xlabel('volatilite')
-        ax.set_ylabel("la valeur de l'option")
-        st.pyplot(fig)
-
-    elif selected_MODELE[i]=='BLACK SCHOOLES':
-        st.subheader('DANS LE CAS DU MODEL DE BLACK SCHOOLES  ')
-        def BS_(K, T, S, r,sigma, opt):
-            N = norm.cdf
-            if opt == 'Call':
-                d1 = (np.log(S / K) + (r + sigma ** 2 / 2) * T) / (sigma * np.sqrt(T))
-                d2 = d1 - sigma * np.sqrt(T)
-                return S * N(d1) - K * np.exp(-r * T) * N(d2)
-            else:
-                d1 = (np.log(S / K) + (r + sigma ** 2 / 2) * T) / (sigma * np.sqrt(T))
-                d2 = d1 - sigma * np.sqrt(T)
-                return K * np.exp(-r * T) * N(-d2) - S * N(-d1)
-        st.write("AVEC LE MODEL BLACK SCHOOELS, LE PRIX DU CALL DEVRAIT ETRE ",BS_(K, T, S0, r,sigma, opt))
-        S = np.arange(0.1, 1.5, 0.01)
-        calls = [BS_(K, T, S0, r,s, 'Call') for s in S]
-        puts = [BS_(K, T, S0, r,s, 'Put') for s in S]
-        fig, ax = plt.subplots(1, 1)
-        ax.scatter(S, calls, label='Call')
-        ax.scatter(S, puts, label='Put')
-        ax.set_xlabel('volatilite')
-        ax.set_ylabel("la valeur de l'option")
-        st.pyplot(fig)
-
-    elif selected_MODELE[i]=='MONTE CARLO':
-        st.subheader('DANS LE CAS DU MODEL  Monte Carlo ')
-        def Monte_Carlo(K, T, S0, r,sigma, opt):
-            numOfPath = 10000
-            randomSeries = np.random.randn(numOfPath)
-            s_t = S0 * np.exp((r - 0.5 * sigma * sigma) * T + randomSeries * sigma * math.sqrt(T))
-            if opt == 'Call':
-                sumValue = np.maximum(s_t - K, 0.0).sum()
-                price = np.exp(-r * T) * sumValue / numOfPath
-                return price
-            else:
-                sumValue = np.maximum(K - s_t, 0.0).sum()
-                price = np.exp(-r * T) * sumValue / numOfPath
-                return price
-
-
-        st.write("AVEC LE MODEL MONTE CARLO, LE PRIX DU CALL DEVRAIT ETRE ", Monte_Carlo(K, T, S0, r,sigma, opt))
-
-        S = np.arange(0.1, 1.5,0.01)
-        calls = [Monte_Carlo(K, T, S0, r, s, 'Call') for s in S]
-        puts = [Monte_Carlo(K, T, S0, r, s, 'Put') for s in S]
-        fig, ax = plt.subplots(1, 1)
-        ax.scatter(S, calls, label='Call')
-        ax.scatter(S, puts, label='Put')
-        ax.set_xlabel('volatilite')
-        ax.set_ylabel("la valeur de l'option")
-        st.pyplot(fig)
+col_names = ["Date", "13 semaines", "26 semaines","52 semaines","2 ans","5 ans","10 ans","15 ans","25 ans","30 ans"]
+df = pd.read_csv('BDT-2000-2022.csv',names=col_names,delimiter=',', skiprows=0, low_memory=False)
+df=pd.DataFrame(df)
+Maturite=[13,26,52,104,282,484,766,1300,1512]
+st.title('COURBE DES TAUX APPLICATION')
+st.subheader('LA BASE DES DONNEES EST ')
+st.write(df)
+st.subheader('MODELES DETERMINISTES')
+DETERMINISTE =['interpolation linaire','interpolation Cubique','Nelson Siegel','Nelson Siegle Svensson']
+selected_DET = st.sidebar.multiselect('MODELE DETERMINISTE CHOISI', DETERMINISTE,DETERMINISTE)
+DATE_ = st.selectbox('DATE CHOISI',df.Date)
+u = df.loc[df['Date'] == DATE_]
+u = u.values.tolist()
+arr = np.array(u)
+arr = np.delete(arr, 0)
+q = arr.tolist()
+d = []
+k = 0
+for i in q:
+    if i != '-':
+        c = str(i).replace("%", "")
+        d.append(float(c))
 
     else:
-        print('PAS DU MODEL ok')
+
+        k = k + 1
+        d.append(float(c) + k * 0.3)
+xnew = np.linspace(13,1512, num=28, endpoint=True)
+beta0   = 0.1 # initial guess
+beta1   = 0.1 # initial guess
+beta2   = 0.1 # initial guess
+beta3   = 0.5 # initial guess
+lambda0 = 2 # initial guess
+lambda1 = 5 # initial guess
+from scipy.interpolate import interp1d
+def interpolantion_lineaire(x, y):
+
+            def interpFn(x0):
+                if x0 < x[0] or x0 > x[-1]:
+                    raise BaseException
+                elif x0 == x[0]:
+                    return y[0]
+                elif x0 == x[-1]:
+                    return y[-1]
+                else:
+                    i2 = 0
+                    while x0 > x[i2]:
+                        i2 += 1
+                    i1 = i2 - 1
+                    t = (x0 - x[i1]) / (x[i2] - x[i1])
+                    return y[i1] * (1 - t) + t * y[i2]
+
+            return interpFn
+f = interp1d(Maturite, d)
+from scipy.interpolate import CubicSpline
+f2 =CubicSpline(Maturite,d)
+for i in range(len(selected_DET)):
+    if selected_DET[i] == 'interpolation linaire':
+        st.subheader("Dans le cas du modele d'interpolation linaire" )
+        from scipy.interpolate import interp1d
+        def interpolantion_lineaire(x, y):
+
+            def interpFn(x0):
+                if x0 < x[0] or x0 > x[-1]:
+                    raise BaseException
+                elif x0 == x[0]:
+                    return y[0]
+                elif x0 == x[-1]:
+                    return y[-1]
+                else:
+                    i2 = 0
+                    while x0 > x[i2]:
+                        i2 += 1
+                    i1 = i2 - 1
+                    t = (x0 - x[i1]) / (x[i2] - x[i1])
+                    return y[i1] * (1 - t) + t * y[i2]
+
+            return interpFn
+        f = interp1d(Maturite, d)
+        plt.plot(Maturite, d, 'o', xnew, f(xnew), '-')
+        plt.legend(['data', 'linear'], loc='best')
+        plt.show()
+    elif selected_DET[i] == 'interpolation Cubique':
+        def interpolation_cubique(x, y):
+            def interpFn(xx):
+                if xx <= x[1] or xx > x[-2]:
+                    return float('nan')
+                else:
+                    i2 = 0
+                    while xx > x[i2]:
+                        i2 += 1
+                    i1 = i2 - 1
+                    i0 = i1 - 1;
+                    i3 = i2 + 1;
+
+                    x0 = x[i0]
+                    x1 = x[i1]
+                    x2 = x[i2]
+                    x3 = x[i3]
+                    y0 = y[i0]
+                    y1 = y[i1]
+                    y2 = y[i2]
+                    y3 = y[i3]
+
+                    d0 = (y1 - y0) / (x1 - x0)
+                    h0 = (x1 - x0)
+                    d1 = (y2 - y1) / (x2 - x1)
+                    h1 = (x2 - x1)
+                    d2 = (y3 - y2) / (x3 - x2)
+                    h2 = (x3 - x2)
+
+                    if d0 * d1 > 0:
+                        w01 = h0 + 2 * h1
+                        w11 = h1 + 2 * h0
+                        m1 = (w01 + w11) / (w01 / d0 + w11 / d1)
+                    else:
+                        m1 = 0
+
+                    if d1 * d2 > 0:
+                        w02 = h1 + 2 * h2
+                        w12 = h2 + 2 * h1
+                        m2 = (w02 + w12) / (w02 / d1 + w12 / d2)
+                    else:
+                        m2 = 0
+
+                    p1 = y1
+                    p2 = y2
+
+                    t = (xx - x1) / (x2 - x1)
+                    res1 = (2 * (t ** 3) - 3 * (t ** 2) + 1) * p1
+                    res2 = (t ** 3 - 2 * (t ** 2) + t) * (x2 - x1) * m1
+                    res3 = (-2 * (t ** 3) + 3 * (t ** 2)) * p2
+                    res4 = ((t ** 3) - (t ** 2)) * (x2 - x1) * m2
+                    res = res1 + res2 + res3 + res4
+                    return res
+
+            return interpFn
+
+
+        from scipy.interpolate import CubicSpline
+
+        f2 = CubicSpline(Maturite, d)
+        plt.plot(Maturite, d, 'o', xnew, f2(xnew), '-')
+        plt.legend(['data', 'Cubique'], loc='best')
+        plt.show()
+    elif selected_DET[i] == 'Nelson Siegel':
+
+
+        def NelsonSiegel(T, beta0, beta1, beta2, lambda0):
+            alpha1 = (1 - np.exp(-T / lambda0)) / (T / lambda0)
+            alpha2 = alpha1 - np.exp(-T / lambda0)
+            return beta0 + beta1 * alpha1 + beta2 * alpha2
+
+
+        def NSGoodFit(params, TimeVec, YieldVec):
+            return np.sum((NelsonSiegel(TimeVec, params[0], params[1], params[2], params[3]) - YieldVec) ** 2)
+
+
+        def NSMinimize(beta0, beta1, beta2, lambda0, TimeVec, YieldVec):
+            optT_sol = minimize(NSGoodFit, x0=np.array([beta0, beta1, beta2, lambda0]), args=(TimeVec, YieldVec))
+            if (optT_sol.success):
+                return optT_sol.x
+            else:
+                return []
+
+
+        TimeVec = np.array(Maturite)
+        YieldVec = np.array(d)
+        ## Implementation
+        kk = NSMinimize(beta0, beta1, beta2, lambda0, TimeVec, YieldVec)
+        print(NelsonSiegel(xnew, kk[0], kk[1], kk[2], kk[3]))
+        plt.plot(Maturite, d, 'o', xnew,NelsonSiegel(xnew, kk[0], kk[1], kk[2], kk[3]),'-')
+        plt.legend(['data', 'NelsonSiegel'], loc='best')
+        plt.show()
+
+    elif selected_DET[i] =='Nelson Siegle Svensson':
+        def NelsonSiegelSvansson(T, beta0, beta1, beta2, beta3, lambda0, lambda1):
+            alpha1 = (1 - np.exp(-T / lambda0)) / (T / lambda0)
+            alpha2 = alpha1 - np.exp(-T / lambda0)
+            alpha3 = (1 - np.exp(-T / lambda1)) / ((T / lambda1) - np.exp(-T / lambda1))
+            return beta0 + beta1 * alpha1 + beta2 * alpha2 + beta3 * alpha3
+
+
+        def NSSGoodFit(params, TimeVec, YieldVec):
+            return np.sum((NelsonSiegelSvansson(TimeVec, params[0], params[1], params[2], params[3], params[4],params[5]) - YieldVec) ** 2)
+
+
+        def NSSMinimize(beta0, beta1, beta2, beta3, lambda0, lambda1, TimeVec, YieldVec):
+            opt_sol = minimize(NSSGoodFit, x0=np.array([beta0, beta1, beta2, beta3, lambda0, lambda1]),args=(TimeVec, YieldVec), method="Nelder-Mead")
+            if (opt_sol.success):
+                return opt_sol.x
+            else:
+                return []
+
+
+        TimeVec = np.array(Maturite)
+        YieldVec = np.array(d)
+        kk = NSSMinimize(beta0, beta1, beta2, beta3, lambda0, lambda1, TimeVec, YieldVec)
+        print(NelsonSiegelSvansson(xnew,kk[0], kk[1], kk[2], kk[3], kk[4], kk[5]))
+        plt.plot(Maturite, d, 'o', xnew, NelsonSiegelSvansson(xnew, kk[0], kk[1], kk[2], kk[3], kk[4], kk[5]),'-')
+        plt.legend(['data', 'NelsonSiegel Svansson'], loc='best')
+        plt.show()
+fig, ax= plt.subplots(1, 1)
+curve_fit1, status1 = calibrate_ns_ols(np.array(Maturite),np.array(d)) #NS model calibrate
+curve_fit, status = calibrate_nss_ols(np.array(Maturite),np.array(d)) #NSS model calibrate
+NS_ZC = NelsonSiegelCurve.zero(curve_fit1,np.array(xnew))
+NSS_ZC = NelsonSiegelSvenssonCurve.zero(curve_fit,np.array(xnew))
+ax.plot(xnew,f(xnew), label='LINEAIRE')
+ax.plot(xnew,f2(xnew), label='CUBIQUE')
+ax.plot(xnew,NS_ZC,label='NS')
+ax.plot(xnew,NSS_ZC,label='NSS')
+ax.set_xlabel('semaines')
+ax.set_ylabel("taux d'interet")
+st.pyplot(fig)
+
+
+
+
 
 
 
